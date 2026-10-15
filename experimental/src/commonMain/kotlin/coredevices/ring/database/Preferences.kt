@@ -8,6 +8,7 @@ import coredevices.ring.agent.integrations.providers.BuiltInIntegrationProviders
 import coredevices.ring.agent.integrations.providers.LegacyProviderIds
 import coredevices.ring.data.NoteShortcutType
 import coredevices.util.models.CactusSTTMode
+import kotlin.uuid.Uuid
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,6 +46,8 @@ interface Preferences: BasePreferences {
     val platformSttDefaulted: Boolean
     /** Android only: always false on iOS, where setting it throws. */
     val usePendingIntentScan: StateFlow<Boolean>
+    /** User-editable set of watchapp UUIDs accepted for dictation ingestion. */
+    val indexFeedWatchappUuids: StateFlow<Set<Uuid>>
 
     suspend fun setUseCactusTranscription(useCactus: Boolean)
     fun setCactusMode(mode: CactusSTTMode)
@@ -68,6 +71,7 @@ interface Preferences: BasePreferences {
     fun setDefaultCaptureType(type: DefaultCaptureType)
     val targetCalendar: StateFlow<Int?>
     fun setTargetCalendar(calendarId: Int?)
+    fun setIndexFeedWatchappUuids(uuids: Set<Uuid>)
 }
 
 class PreferencesImpl(private val settings: Settings): Preferences {
@@ -164,6 +168,14 @@ class PreferencesImpl(private val settings: Settings): Preferences {
     override val usePendingIntentScan = _usePendingIntentScan.asStateFlow()
     private val _scanByPairedAddress = MutableStateFlow(settings.getBoolean("scan_by_paired_address", true))
     override val scanByPairedAddress = _scanByPairedAddress.asStateFlow()
+    private val _indexFeedWatchappUuids = MutableStateFlow(
+        settings.getStringOrNull("index_feed_watchapp_uuids")
+            ?.split(",")
+            ?.mapNotNull { runCatching { Uuid.parse(it) }.getOrNull() }
+            ?.toSet()
+            ?: emptySet()
+    )
+    override val indexFeedWatchappUuids = _indexFeedWatchappUuids.asStateFlow()
 
     override suspend fun setUseCactusTranscription(useCactus: Boolean) {
         withContext(Dispatchers.IO) {
@@ -331,6 +343,15 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         } ?: settings.remove("target_calendar")
 
         _targetCalendar.value = calendarId
+    }
+
+    override fun setIndexFeedWatchappUuids(uuids: Set<Uuid>) {
+        if (uuids.isEmpty()) {
+            settings.remove("index_feed_watchapp_uuids")
+        } else {
+            settings.putString("index_feed_watchapp_uuids", uuids.joinToString(",") { it.toString() })
+        }
+        _indexFeedWatchappUuids.value = uuids
     }
 }
 

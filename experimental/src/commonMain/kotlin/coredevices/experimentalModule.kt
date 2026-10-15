@@ -74,6 +74,7 @@ import coredevices.ring.api.NenyaModel
 import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.RingPairing
 import coredevices.ring.service.RingSync
+import coredevices.ring.service.recordings.PebbleWatchappDictationSink
 import coredevices.ring.service.recordings.RecordingPreprocessor
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.recordings.RecordingProcessor
@@ -97,6 +98,7 @@ import coredevices.util.PermissionRequester
 import coredevices.util.sync.SyncHandler
 import coredevices.util.Platform
 import coredevices.util.isAndroid
+import coredevices.util.dictation.PebbleDictationSink
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -246,6 +248,7 @@ val experimentalModule = module {
     singleOf(::BackupExporter)
     singleOf(::BackupImporter)
     singleOf(::BackupManager)
+    single { PebbleWatchappDictationSink(get(), get(), get()) } bind PebbleDictationSink::class
     singleOf(::DocumentEncryptor)
     singleOf(::EncryptionManager)
     singleOf(::RecordingPreprocessor)

@@ -1,0 +1,63 @@
+name: Android APK (fork)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [pr-460-index-feed]
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v6.0.1
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0 # versionName comes from `git describe --tags`
+      - name: Fetch upstream tags (versionName needs a reachable tag)
+        run: |
+          git remote add upstream https://github.com/coredevices/mobileapp.git
+          git fetch upstream --tags --no-recurse-submodules
+          git describe --tags --abbrev=0
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: android-deps-${{ runner.os }}-${{ hashFiles('gradle/**', 'gradlew*', 'gradle.properties', '*.gradle*') }}
+          restore-keys: android-deps-${{ runner.os }}-
+      # Optional secrets (see README-FORK.md). Without them the APK still builds,
+      # but Google sign-in is disabled.
+      - name: Firebase config
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            echo "$GOOGLE_SERVICES_JSON" > androidApp/src/google-services.json
+          else
+            mv androidApp/src/google-services-dummy.json androidApp/src/google-services.json
+          fi
+      - name: Stable signing key (keeps the SHA-1 constant across builds)
+        env:
+          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$DEBUG_KEYSTORE_BASE64" ]; then
+            mkdir -p ~/.android
+            echo "$DEBUG_KEYSTORE_BASE64" | base64 -d > ~/.android/debug.keystore
+          fi
+      - name: Build debug APK
+        run: |
+          ARGS=""
+          if [ -n "$GOOGLE_CLIENT_ID" ]; then ARGS="-PgoogleClientId=$GOOGLE_CLIENT_ID"; fi
+          ./gradlew :androidApp:assembleDebug $ARGS --no-daemon
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pebble-app-debug-apk
+          path: androidApp/build/outputs/apk/debug/*.apk

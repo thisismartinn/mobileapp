@@ -258,6 +258,7 @@ val watchModule = module {
             rebble = get(),
             cactusService = get(),
             coreConfigFlow = get(),
+            dictationSink = getOrNull(),
         )
     } bind TranscriptionProvider::class
 

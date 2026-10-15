@@ -104,6 +104,9 @@ class SettingsViewModel(
     val showNoteShortcutDialog = _showNoteShortcutDialog.asStateFlow()
     val noteShortcut = preferences.noteShortcut
     val autoDismissActionNotifications = preferences.autoDismissActionNotifications
+    private val _showIndexFeedWatchappsDialog = MutableStateFlow(false)
+    val showIndexFeedWatchappsDialog = _showIndexFeedWatchappsDialog.asStateFlow()
+    val indexFeedWatchappUuids = preferences.indexFeedWatchappUuids
     private val currentRing = indexDeviceManager.rings.map {
         it.firstOrNull { ring -> ring is KnownIndexDevice }
     }
@@ -280,6 +283,18 @@ class SettingsViewModel(
 
     fun setNoteShortcut(shortcut: NoteShortcutType) {
         preferences.setNoteShortcut(shortcut)
+    }
+
+    fun setIndexFeedWatchappUuids(uuids: Set<Uuid>) {
+        preferences.setIndexFeedWatchappUuids(uuids)
+    }
+
+    fun showIndexFeedWatchappsDialog() {
+        _showIndexFeedWatchappsDialog.value = true
+    }
+
+    fun closeIndexFeedWatchappsDialog() {
+        _showIndexFeedWatchappsDialog.value = false
     }
 
     fun showContactsDialog() {

@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import coredevices.speex.SpeexCodec
 import coredevices.speex.SpeexDecodeResult
 import coredevices.util.CoreConfigFlow
+import coredevices.util.dictation.PebbleDictationSink
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.transcription.CactusTranscriptionService
 import coredevices.util.transcription.TranscriptionException
@@ -22,18 +23,24 @@ import kotlinx.coroutines.withContext
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
+import kotlin.uuid.Uuid
 
 /**
  * Mode-aware [TranscriptionProvider] dispatching between [HybridTranscription] (cloud/local via
  * Cactus + WisprFlow) and [RebbleAsrTranscription] (Rebble's ASR). Owns fallback orchestration
  * for `RebbleFirst`/`RebbleFallback` modes (which buffer Speex frames so they can be replayed
  * across both backends).
+ *
+ * When [dictationSink] matches a session's `appUuid`, [transcribe] reports
+ * [TranscriptionResult.Success] with no words instead of transcribing, so the watch still gets
+ * its normal end-of-session ack with no transcript.
  */
 class STTRouter(
     private val cactus: HybridTranscription,
     private val rebble: RebbleAsrTranscription,
     private val cactusService: CactusTranscriptionService,
     private val coreConfigFlow: CoreConfigFlow,
+    private val dictationSink: PebbleDictationSink? = null,
 ) : TranscriptionProvider {
     companion object {
         private val logger = Logger.withTag("STTRouter")
@@ -53,6 +60,34 @@ class STTRouter(
                 rebble.isAvailable() || cactus.canServeSession()
             else -> cactus.canServeSession()
         }
+    }
+
+    override suspend fun canServeSession(appUuid: Uuid): Boolean {
+        if (dictationSink?.canIngest(appUuid) == true) return true
+        return canServeSession()
+    }
+
+    @OptIn(ExperimentalUnsignedTypes::class)
+    override suspend fun transcribe(
+        encoderInfo: VoiceEncoderInfo,
+        audioFrames: Flow<UByteArray>,
+        isNotificationReply: Boolean,
+        appUuid: Uuid,
+    ): TranscriptionResult {
+        if (dictationSink?.canIngest(appUuid) == true) {
+            require(encoderInfo is VoiceEncoderInfo.Speex) {
+                "Pebble dictation intercept only supports Speex encoding, got ${encoderInfo::class.simpleName}"
+            }
+            val frames = audioFrames.toList()
+            if (frames.isEmpty()) {
+                return TranscriptionResult.Success(emptyList())
+            }
+            val pcm = decodeSpeex(encoderInfo, frames)
+            logger.i { "Diverting dictation for app $appUuid to ring feed (${pcm.size} PCM bytes @ ${encoderInfo.sampleRate}Hz)" }
+            dictationSink.ingest(appUuid, pcm, encoderInfo.sampleRate.toInt())
+            return TranscriptionResult.Success(emptyList())
+        }
+        return transcribe(encoderInfo, audioFrames, isNotificationReply)
     }
 
     @OptIn(ExperimentalUnsignedTypes::class)
