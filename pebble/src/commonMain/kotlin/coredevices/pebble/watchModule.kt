@@ -43,6 +43,7 @@ import coredevices.pebble.services.RealPebbleWebServices
 import coredevices.pebble.services.RebbleAsrService
 import coredevices.pebble.services.RebbleAsrTranscription
 import coredevices.pebble.services.STTRouter
+import coredevices.util.dictation.PebbleDictationSink
 import coredevices.pebble.ui.AppStoreCollectionScreenViewModel
 import coredevices.pebble.ui.AppstoreSettingsScreenViewModel
 import coredevices.pebble.ui.ContactsViewModel
@@ -258,7 +259,7 @@ val watchModule = module {
             rebble = get(),
             cactusService = get(),
             coreConfigFlow = get(),
-            dictationSink = getOrNull(),
+            dictationSink = lazy { getOrNull<PebbleDictationSink>() },
         )
     } bind TranscriptionProvider::class
 

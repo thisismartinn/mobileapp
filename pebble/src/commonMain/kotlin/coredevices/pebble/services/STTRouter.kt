@@ -40,7 +40,7 @@ class STTRouter(
     private val rebble: RebbleAsrTranscription,
     private val cactusService: CactusTranscriptionService,
     private val coreConfigFlow: CoreConfigFlow,
-    private val dictationSink: PebbleDictationSink? = null,
+    private val dictationSink: Lazy<PebbleDictationSink?> = lazyOf(null),
 ) : TranscriptionProvider {
     companion object {
         private val logger = Logger.withTag("STTRouter")
@@ -63,7 +63,7 @@ class STTRouter(
     }
 
     override suspend fun canServeSession(appUuid: Uuid): Boolean {
-        if (dictationSink?.canIngest(appUuid) == true) return true
+        if (dictationSink.value?.canIngest(appUuid) == true) return true
         return canServeSession()
     }
 
@@ -74,7 +74,8 @@ class STTRouter(
         isNotificationReply: Boolean,
         appUuid: Uuid,
     ): TranscriptionResult {
-        if (dictationSink?.canIngest(appUuid) == true) {
+        val sink = dictationSink.value
+        if (sink?.canIngest(appUuid) == true) {
             require(encoderInfo is VoiceEncoderInfo.Speex) {
                 "Pebble dictation intercept only supports Speex encoding, got ${encoderInfo::class.simpleName}"
             }
@@ -84,7 +85,7 @@ class STTRouter(
             }
             val pcm = decodeSpeex(encoderInfo, frames)
             logger.i { "Diverting dictation for app $appUuid to ring feed (${pcm.size} PCM bytes @ ${encoderInfo.sampleRate}Hz)" }
-            dictationSink.ingest(appUuid, pcm, encoderInfo.sampleRate.toInt())
+            sink.ingest(appUuid, pcm, encoderInfo.sampleRate.toInt())
             return TranscriptionResult.Success(emptyList())
         }
         return transcribe(encoderInfo, audioFrames, isNotificationReply)
